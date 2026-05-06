@@ -1,7 +1,7 @@
 # Nostr Skill for Hermes Agent
 
 ## Description
-Complete, secure Nostr integration for Hermes Agent. Read events, draft posts, upload images to Blossom, publish with explicit TTY approval. NIP-94 compliant image metadata."
+Complete, secure Nostr integration for Hermes Agent. Read events, draft posts, upload images to Blossom, publish with explicit TTY approval. NIP-94 compliant image metadata.
 
 ## Meta-Data
 - version: 2.1.0
