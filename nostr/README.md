@@ -12,7 +12,7 @@ Complete, secure Nostr integration for Hermes Agent. Read events, draft posts, u
 - version: 2.1.0
 - author: "bronoman + SuperGrok + Hermes local (May 2026)"
 - license: MIT
-- github: https://github.com/bronoman/hermes-skills/tree/3507d9bc4b1538bee6ec62acaba2166fbd21d94a/social-media/nostr
+- github: https://github.com/bronoman/hermes-skills/tree/main/nostr
 - platforms: [linux]
 
 ## What This Skill Does
@@ -71,3 +71,16 @@ The author is not responsible or liable for:
 
 This project is an expression of personal technical exploration and free speech. It does not constitute professional software, financial advice, or legal counsel.
 By using this skill you agree that you are solely responsible for your own actions and compliance with all applicable laws.
+
+## Install Nostr Skill
+
+**Direct from your repo (works now):**
+```bash
+hermes skills tap add bronoman/hermes-skills
+hermes skills install nostr
+```
+
+**After HermesHub merge (recommended):**
+```bash
+hermes skills install hermeshub/nostr
+```
