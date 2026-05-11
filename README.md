@@ -1,4 +1,10 @@
 # Overview
-This project is for new skills for Hermes Agent.
-At the moment, the only new skill under development is the the [Nostr](https://en.wikipedia.org/wiki/Nostr) skill which allows HERMES Agent to connect to Nostr nodes.
-For details, please see the upcoming DESCRIPTION.md file
+This project is for new skills for [HERMES Agent](https://hermes-agent.nousresearch.com/).
+
+At the moment, the following skills are available here:
+ - [Nostr](https://en.wikipedia.org/wiki/Nostr) skill - allows HERMES Agent to connect to Nostr relay/nodes and retrieve and publish notes/content to Nostr.
+ - [CoinGecko](https://www.coingecko.com/en/coins/bitcoin) skill - allows HERMES Agent to retrieve cryptocurrency price data & related content using the CoinGecko APIs.
+
+For details, please see the respective README.md and /references/DESCRIPTION.md files.
+
+PRs welcome.
