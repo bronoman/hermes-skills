@@ -58,9 +58,9 @@ def _get_mempool_api_url() -> str:
     try:
         from dotenv import dotenv_values
         env_data = dotenv_values()
-        api_url = env_data.get("BITCOIN_API_URL", "") or MEMPOOL_API_DEFAULT
+        api_url = env_data.get("BITCOIN_API_URL") or MEMPOOL_API_DEFAULT
     except Exception:
-        api_url = os.environ.get("BITCOIN_API_URL", MEMPOOL_API_DEFAULT)
+        api_url = MEMPOOL_API_DEFAULT
     
     return api_url
 
