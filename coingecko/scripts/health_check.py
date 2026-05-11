@@ -4,53 +4,10 @@ Health check for price service API and fallback to Kraken.
 Verifies API key validity, rate limit status, and system readiness.
 """
 
-import os
 import json
 import requests
-from pathlib import Path
 from datetime import datetime
 
-
-
-
-def _load_credential(key_name: str = "CG_API_KEY") -> str:
-    """Retrieve credential from system configuration"""
-    try:
-        from dotenv import dotenv_values
-        env_vars = dotenv_values()
-        return env_vars.get(key_name, "")
-    except:
-        return ""
-
-def get_coingecko_api_key() -> str:
-    """Load price service API key from environment variables"""
-    # Try environment variable first - check both CG_API_KEY and API_KEY
-    api_key = _load_credential("CG_API_KEY")
-    if api_key:
-        return api_key
-    
-    # Fallback to generic API_KEY name
-    api_key = _load_credential("API_KEY")
-    if api_key:
-        return api_key
-    
-    # Fallback: try os.getenv for backward compatibility
-    api_key = os.getenv("CG_API_KEY", "") or os.getenv("API_KEY", "")
-    if api_key:
-        return api_key
-    
-    # Fallback: try to load from config file if it exists
-    try:
-        config_path = Path.home() / ".hermes" / ".env"
-        if config_path.exists():
-            with open(config_path) as f:
-                for line in f:
-                    if "CG_API_KEY" in line or "API_KEY" in line:
-                        return line.split("=", 1)[1].strip()
-    except:
-        pass
-    
-    return ""
 
 def health_check() -> dict:
     """
@@ -72,85 +29,74 @@ def health_check() -> dict:
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
     
-    # Check API key
-    api_key = get_coingecko_api_key()
+    # Load API key inline - used only for API call (never logged or stored)
+    try:
+        from dotenv import dotenv_values
+        env_data = dotenv_values()
+        api_key = env_data.get("CG_API_KEY") or env_data.get("API_KEY") or ""
+    except:
+        api_key = ""
     
     if not api_key:
         result["key_type"] = "none"
         result["api_status"] = "not_configured"
         result["note"] = "No API key configured; will use Kraken fallback"
     else:
-        result["key_type"] = "demo" if api_key.startswith("CG-") else "unknown"
-        
-        # Test price service API
+        # Verify API key works
         try:
+            headers = {"x-cg-pro-api-key": api_key}
             url = "https://api.coingecko.com/api/v3/simple/price"
-            params = {
-                "ids": "bitcoin",
-                "vs_currencies": "usd",
-                "x_cg_demo_api_key": api_key
-            }
+            params = {"ids": "bitcoin", "vs_currencies": "usd"}
             
-            response = requests.get(url, params=params, timeout=5)
+            response = requests.get(url, params=params, headers=headers, timeout=10)
             
             if response.status_code == 200:
+                result["api_status"] = "ok"
+                result["key_type"] = "demo"  # Can't distinguish without more info
+                
                 data = response.json()
-                if "bitcoin" in data and "usd" in data["bitcoin"]:
-                    result["api_status"] = "ok"
-                    result["price_sample"] = data["bitcoin"]["usd"]
-                    
-                    if "X-Ratelimit-Limit-Requests-Per-Minute" in response.headers:
-                        limit = int(response.headers.get("X-Ratelimit-Limit-Requests-Per-Minute", 0))
-                        remaining = int(response.headers.get("X-Ratelimit-Remaining-Requests", 0))
-                        result["rate_limit_total"] = limit
-                        result["rate_limit_remaining"] = remaining
-                else:
-                    result["api_status"] = "error"
-                    result["error"] = "Unexpected API response format"
+                if data.get("bitcoin"):
+                    price_sample = data["bitcoin"].get("usd", 0)
+                    result["price_sample"] = price_sample
             elif response.status_code == 401:
                 result["api_status"] = "error"
-                result["error"] = "Invalid API key (401 Unauthorized)"
-            elif response.status_code == 429:
-                result["api_status"] = "rate_limited"
-                result["error"] = "API rate limit exceeded (429)"
+                result["key_type"] = "invalid"
+                result["error"] = "API key authentication failed"
             else:
                 result["api_status"] = "error"
+                result["key_type"] = "unknown"
                 result["error"] = f"HTTP {response.status_code}"
-        
-        except requests.exceptions.Timeout:
-            result["api_status"] = "timeout"
-            result["error"] = "Request timeout (>5s)"
         except Exception as e:
             result["api_status"] = "error"
-            result["error"] = str(e)
+            result["error"] = str(e)[:100]
     
-    # Test Kraken fallback
+    # Check Kraken fallback
     try:
-        response = requests.get(
-            "https://api.kraken.com/0/public/Ticker",
-            params={"pair": "XBTUSD"},
-            timeout=5
-        )
+        url = "https://api.kraken.com/0/public/Ticker"
+        params = {"pair": "XBTUSDT"}
+        response = requests.get(url, params=params, timeout=10)
         
         if response.status_code == 200:
+            result["kraken_fallback"] = "ok"
             data = response.json()
-            if "result" in data and "XXBTZUSD" in data["result"]:
-                result["kraken_fallback"] = "ok"
-                price = float(data["result"]["XXBTZUSD"]["c"][0])
-                result["kraken_price_sample"] = price
-            else:
-                result["kraken_fallback"] = "error"
-                result["kraken_error"] = "No XXBTZUSD data"
+            if "result" in data and data["result"]:
+                ticker = next(iter(data["result"].values()))
+                kraken_price = float(ticker.get("c", [0])[0])
+                result["kraken_price_sample"] = kraken_price
         else:
             result["kraken_fallback"] = "error"
             result["kraken_error"] = f"HTTP {response.status_code}"
-    
     except Exception as e:
         result["kraken_fallback"] = "error"
-        result["kraken_error"] = str(e)
+        result["kraken_error"] = str(e)[:100]
     
     return result
 
-if __name__ == "__main__":
+
+def main():
     result = health_check()
     print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()

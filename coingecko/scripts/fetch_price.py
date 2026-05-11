@@ -10,45 +10,6 @@ import requests
 from pathlib import Path
 
 
-def _load_credential(key_name: str = "CG_API_KEY") -> str:
-    """Retrieve credential from system configuration"""
-    try:
-        from dotenv import dotenv_values
-        env_vars = dotenv_values()
-        return env_vars.get(key_name, "")
-    except:
-        return ""
-
-def get_coingecko_api_key() -> str:
-    """Load price service API key from environment variables"""
-    # Try environment variable first - check both CG_API_KEY and API_KEY
-    api_key = _load_credential("CG_API_KEY")
-    if api_key:
-        return api_key
-    
-    # Fallback to generic API_KEY name
-    api_key = _load_credential("API_KEY")
-    if api_key:
-        return api_key
-    
-    # Fallback: try os.getenv for backward compatibility
-    api_key = os.getenv("CG_API_KEY", "") or os.getenv("API_KEY", "")
-    if api_key:
-        return api_key
-    
-    # Fallback: try to load from config file if it exists
-    try:
-        config_path = Path.home() / ".hermes" / ".env"
-        if config_path.exists():
-            with open(config_path) as f:
-                for line in f:
-                    if "CG_API_KEY" in line or "API_KEY" in line:
-                        return line.split("=", 1)[1].strip()
-    except:
-        pass
-    
-    return ""
-
 def fetch_btc_price_coingecko(timeout: int = 10) -> dict:
     """
     Fetch BTC/USD price from price service API.
@@ -58,165 +19,128 @@ def fetch_btc_price_coingecko(timeout: int = 10) -> dict:
             "price": float,           # e.g., 81267.00
             "price_str": str,         # e.g., "$81,267.00"
             "change_24h": float,      # e.g., -0.22
-            "change_badge": str,      # e.g., "▼ 0.22%" or "▲ 1.15%"
-            "source": str,            # "price service"
-            "success": bool
+            "change_badge": str,      # e.g., "▼ 0.22%"
+            "badge_type": str,        # "GOOD NEWS", "CAUTION", "BAD NEWS"
+            "source": str,            # "price service" or "Kraken"
+            "market_cap_usd": float,  # (CoinGecko only)
+            "volume_24h_usd": float   # (CoinGecko only)
         }
     """
     try:
-        api_key = get_coingecko_api_key()
-        if not api_key:
-            return {
-                "success": False,
-                "error": "API key not configured. Set API_KEY environment variable."
-            }
+        # Load API key inline from dotenv or environment - used only for API call
+        try:
+            from dotenv import dotenv_values
+            env_data = dotenv_values()
+            api_key = env_data.get("CG_API_KEY") or env_data.get("API_KEY") or ""
+        except:
+            api_key = ""
         
+        # Construct headers with key only if available (never logged or exposed)
+        headers = {}
+        if api_key:
+            headers["x-cg-pro-api-key"] = api_key
+        
+        # Fetch from price service API
         url = "https://api.coingecko.com/api/v3/simple/price"
-        
         params = {
             "ids": "bitcoin",
             "vs_currencies": "usd",
             "include_market_cap": "true",
             "include_24hr_vol": "true",
-            "include_24hr_change": "true",
-            "x_cg_demo_api_key": api_key
+            "include_24hr_change": "true"
         }
         
-        response = requests.get(url, params=params, timeout=timeout)
+        response = requests.get(url, params=params, headers=headers, timeout=timeout)
         
-        if response.status_code != 200:
+        if response.status_code == 200:
+            data = response.json()
+            btc = data.get("bitcoin", {})
+            
+            price = btc.get("usd", 0)
+            change_24h = btc.get("usd_24h_change", 0)
+            market_cap = btc.get("usd_market_cap", 0)
+            volume_24h = btc.get("usd_24h_vol", 0)
+            
+            # Determine badge
+            if change_24h > 0.5:
+                badge = f"▲ {abs(change_24h):.2f}%"
+                badge_type = "GOOD NEWS"
+            elif change_24h < -0.5:
+                badge = f"▼ {abs(change_24h):.2f}%"
+                badge_type = "BAD NEWS"
+            else:
+                badge = f"→ {abs(change_24h):.2f}%"
+                badge_type = "SIDEWAYS MOVEMENT"
+            
             return {
-                "success": False,
-                "error": f"HTTP {response.status_code}: {response.text}"
+                "success": True,
+                "price": price,
+                "price_str": f"${price:,.2f}",
+                "change_24h": change_24h,
+                "change_badge": badge,
+                "badge_type": badge_type,
+                "source": "price service",
+                "market_cap_usd": market_cap,
+                "volume_24h_usd": volume_24h
             }
-        
-        data = response.json()
-        
-        if "error" in data or ("status" in data and "error_message" in data.get("status", {})):
-            error_msg = data.get("error") or data.get("status", {}).get("error_message")
-            return {
-                "success": False,
-                "error": str(error_msg)
-            }
-        
-        if "bitcoin" not in data or "usd" not in data["bitcoin"]:
-            return {
-                "success": False,
-                "error": "Unexpected API response format"
-            }
-        
-        btc_data = data["bitcoin"]
-        price = float(btc_data.get("usd", 0))
-        change_24h = float(btc_data.get("usd_24h_change", 0))
-        
-        price_str = f"${price:,.2f}"
-        
-        if change_24h > 0:
-            change_badge = f"▲ {abs(change_24h):.2f}%"
-            badge_type = "GOOD NEWS"
-        elif change_24h < -1:
-            change_badge = f"▼ {abs(change_24h):.2f}%"
-            badge_type = "SOME FEAR"
-        else:
-            change_badge = f"→ {abs(change_24h):.2f}%"
-            badge_type = "SIDEWAYS MOVEMENT"
-        
-        return {
-            "success": True,
-            "price": price,
-            "price_str": price_str,
-            "change_24h": change_24h,
-            "change_badge": change_badge,
-            "badge_type": badge_type,
-            "source": "price service",
-            "market_cap_usd": btc_data.get("usd_market_cap"),
-            "volume_24h_usd": btc_data.get("usd_24h_vol")
-        }
-    
-    except requests.exceptions.Timeout:
-        return {"success": False, "error": "Request timeout"}
-    except requests.exceptions.RequestException as e:
-        return {"success": False, "error": str(e)}
-    except json.JSONDecodeError:
-        return {"success": False, "error": "Invalid JSON response"}
     except Exception as e:
-        return {"success": False, "error": f"Unexpected error: {str(e)}"}
+        # Silently fall through to Kraken
+        pass
+    
+    # Fallback: Kraken API (public, no auth required)
+    return fetch_btc_price_kraken(timeout)
+
 
 def fetch_btc_price_kraken(timeout: int = 10) -> dict:
     """
-    Fallback: Fetch BTC/USD price from Kraken API (no auth required).
+    Fallback: Fetch BTC/USD price from Kraken (public API, no auth).
     """
     try:
         url = "https://api.kraken.com/0/public/Ticker"
-        params = {"pair": "XBTUSD"}
+        params = {"pair": "XBTUSDT"}
         
         response = requests.get(url, params=params, timeout=timeout)
         
-        if response.status_code != 200:
-            return {
-                "success": False,
-                "error": f"HTTP {response.status_code}",
-                "source": "Kraken"
-            }
-        
-        data = response.json()
-        
-        if data.get("error"):
-            return {
-                "success": False,
-                "error": str(data["error"]),
-                "source": "Kraken"
-            }
-        
-        ticker_data = data.get("result", {}).get("XXBTZUSD", {})
-        
-        if not ticker_data:
-            return {
-                "success": False,
-                "error": "No XXBTZUSD data",
-                "source": "Kraken"
-            }
-        
-        price = float(ticker_data.get("c", [0])[0])
-        
-        price_str = f"${price:,.2f}"
-        
-        return {
-            "success": True,
-            "price": price,
-            "price_str": price_str,
-            "change_24h": 0,
-            "change_badge": "→ Live",
-            "badge_type": "SIDEWAYS MOVEMENT",
-            "source": "Kraken",
-            "bid": float(ticker_data.get("b", [0])[0]),
-            "ask": float(ticker_data.get("a", [0])[0])
-        }
-    
+        if response.status_code == 200:
+            data = response.json()
+            if "result" in data:
+                result = data["result"]
+                # Kraken returns XBTUSDT under that key
+                ticker = next(iter(result.values())) if result else {}
+                
+                # Extract price (c = close)
+                close_price = float(ticker.get("c", [0])[0])
+                
+                # Extract bid/ask
+                bid = float(ticker.get("b", [0])[0])
+                ask = float(ticker.get("a", [0])[0])
+                
+                return {
+                    "success": True,
+                    "price": close_price,
+                    "price_str": f"${close_price:,.2f}",
+                    "change_24h": 0,
+                    "change_badge": "→ Live",
+                    "badge_type": "SIDEWAYS MOVEMENT",
+                    "source": "Kraken",
+                    "bid": bid,
+                    "ask": ask
+                }
     except Exception as e:
-        return {"success": False, "error": str(e), "source": "Kraken"}
+        pass
+    
+    # Final fallback
+    return {
+        "success": False,
+        "error": "Unable to fetch BTC price from any source",
+        "source": "error"
+    }
 
-def get_btc_price(prefer_source: str = "coingecko") -> dict:
-    """
-    Get BTC price with fallback strategy.
-    
-    Args:
-        prefer_source: "coingecko" (default) or "kraken"
-    
-    Returns:
-        Same format as fetch_btc_price_coingecko(), with "source" field
-    """
-    if prefer_source == "coingecko":
-        result = fetch_btc_price_coingecko()
-        if result.get("success"):
-            return result
-        return fetch_btc_price_kraken()
-    else:
-        result = fetch_btc_price_kraken()
-        if result.get("success"):
-            return result
-        return fetch_btc_price_coingecko()
+
+def main():
+    result = fetch_btc_price_coingecko()
+    print(json.dumps(result, indent=2))
+
 
 if __name__ == "__main__":
-    result = get_btc_price(prefer_source="coingecko")
-    print(json.dumps(result, indent=2))
+    main()
