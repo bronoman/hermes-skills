@@ -10,7 +10,7 @@ import requests
 from pathlib import Path
 
 
-def _load_credential(key_name: str = "API_KEY") -> str:
+def _load_credential(key_name: str = "CG_API_KEY") -> str:
     """Retrieve credential from system configuration"""
     try:
         from dotenv import dotenv_values
@@ -21,9 +21,18 @@ def _load_credential(key_name: str = "API_KEY") -> str:
 
 def get_coingecko_api_key() -> str:
     """Load price service API key from environment variables"""
-    # Try environment variable first
-    # Load credential from system
-    api_key = _load_credential()
+    # Try environment variable first - check both CG_API_KEY and API_KEY
+    api_key = _load_credential("CG_API_KEY")
+    if api_key:
+        return api_key
+    
+    # Fallback to generic API_KEY name
+    api_key = _load_credential("API_KEY")
+    if api_key:
+        return api_key
+    
+    # Fallback: try os.getenv for backward compatibility
+    api_key = os.getenv("CG_API_KEY", "") or os.getenv("API_KEY", "")
     if api_key:
         return api_key
     
@@ -33,7 +42,7 @@ def get_coingecko_api_key() -> str:
         if config_path.exists():
             with open(config_path) as f:
                 for line in f:
-                    if "API_KEY" in line:
+                    if "CG_API_KEY" in line or "API_KEY" in line:
                         return line.split("=", 1)[1].strip()
     except:
         pass
