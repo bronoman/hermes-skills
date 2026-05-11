@@ -189,14 +189,8 @@ hermes skills install coingecko
 ```
 
 Or manually:
-```bash
-cd skills
-git clone [repository-url]
-cd coingecko  
-python3 -m venv env
-env/bin/python -m pip install -q requests python-dotenv
-```
-
+use cd skills, then use cloning in git with the proper repository-url
+go to cd coingecko, python3 -m venv env, finally use pip to install ...
 ---
 
 ## Legal Disclaimer
