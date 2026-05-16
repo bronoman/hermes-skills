@@ -9,9 +9,22 @@ metadata:
   hermes:
     tags: [openHAB, Smart Home, REST API, Home Automation, Monitoring, Health Check, Diagnostics]
     homepage: https://www.openhab.org/docs/
+    required_environment_variables:
+      - OPENHAB_BASE_URL
+      - OPENHAB_USERNAME
+      - OPENHAB_PASSWORD
+    # Optional: nice descriptions for the setup prompt
+    config:
+      openhab_base_url:
+        description: "Full base URL of your openHAB instance (e.g. http://192.168.1.50:8080)"
+        required: true
+      openhab_username:
+        description: "openHAB REST API username"
+      openhab_password:
+        description: "openHAB REST API password"
 prerequisites:
-  env_vars: [OPENHAB_BASE_URL, OPENHAB_USERNAME, OPENHAB_PASSWORD]
   commands: [curl, jq]
+
 ---
 
 # openHAB — Smart Home Control & Monitoring

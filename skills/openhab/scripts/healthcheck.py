@@ -1,26 +1,15 @@
 #!/usr/bin/env python3
 """openHAB Full System Health Report"""
-import json, urllib.request, base64, sys, os, re
+import json, urllib.request, base64, sys, os
 from collections import Counter
 
-base_url = os.environ.get("OPENHAB_BASE_URL", "")
-username = os.environ.get("OPENHAB_USERNAME", "")
-password = os.environ.get("OPENHAB_PASSWORD", "")
+base_url = os.environ.get("OPENHAB_BASE_URL")
+username = os.environ.get("OPENHAB_USERNAME")
+password = os.environ.get("OPENHAB_PASSWORD")
 
-if not base_url or not username:
-    # Fallback: try reading from .env file
-    _home = os.path.expanduser("~")
-    _env = os.path.join(_home, ".hermes", ".env")
-    if os.path.exists(_env):
-        with open(_env) as _f:
-            for _line in _f:
-                _line = _line.strip()
-                if _line.startswith("OPENHAB_BASE_URL=") and not base_url:
-                    base_url = _line.split("=", 1)[1].strip()
-                elif _line.startswith("OPENHAB_USERNAME=") and not username:
-                    username = _line.split("=", 1)[1].strip()
-                elif _line.startswith("OPENHAB_PASSWORD="):
-                    password = _line.split("=", 1)[1].strip() if "=" in _line else ""
+if not base_url or not username or not password:
+    print("❌ Missing openHAB credentials. Run: hermes skills configure openhab")
+    sys.exit(1)
 
 def api(endpoint):
     try:
@@ -30,7 +19,10 @@ def api(endpoint):
         with urllib.request.urlopen(req, timeout=5) as resp:
             return json.loads(resp.read())
     except Exception as e:
+        print(f"API error: {e}")
         return None
+
+# ... rest of your script stays exactly the same
 
 print("🏥 openHAB System Health Report")
 print("=" * 50)
